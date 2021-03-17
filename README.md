@@ -1,2 +1,0 @@
-# DataScienceLIb
-Hometasks for DataScience
