@@ -1,2 +1,2 @@
 # DataScienceLIb
-Hometasks for DataScience
+Hometasks for GeekBrains
