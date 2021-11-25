@@ -1,0 +1,1396 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Домашнее задание\n",
+    "В коде из методички реализуйте один или несколько из критериев останова (количество листьев, количество используемых признаков, глубина дерева и т.д.)\n",
+    "Реализуйте дерево для задачи регрессии. Возьмите за основу дерево, реализованное в методичке, заменив механизм предсказания в листе на взятие среднего значения по выборке, и критерий Джини на дисперсию значений."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {
+    "id": "Ycdo0vgdgzKB"
+   },
+   "outputs": [],
+   "source": [
+    "import numpy as np\n",
+    "import matplotlib.pyplot as plt"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "id": "sWm0sO22abXZ"
+   },
+   "source": [
+    "## Реализация дерева решений"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "id": "9yZFTHXJabXa"
+   },
+   "source": [
+    "Реализуем алгоритм алгоритм работы дерева решений своими руками."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/"
+    },
+    "id": "u7Xi827dabXb",
+    "outputId": "99da2a97-2dbc-41f5-9659-9a9898f05435"
+   },
+   "outputs": [],
+   "source": [
+    "import matplotlib.pyplot as plt\n",
+    "%matplotlib inline\n",
+    "import random\n",
+    "\n",
+    "from matplotlib.colors import ListedColormap\n",
+    "from sklearn import datasets\n",
+    "\n",
+    "import numpy as np"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 24,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# сгенерируем данные\n",
+    "regression_data, regression_labels = datasets.make_regression(n_samples = 1000,\n",
+    "                                                                   n_features = 2, n_targets=1,\n",
+    "                                                              noise= 1000, \n",
+    "                                                                   shuffle=True,\n",
+    "                                                                   n_informative = 2, \n",
+    "                                                                   random_state=5)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 25,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/",
+     "height": 483
+    },
+    "id": "FHpOr1k6abXg",
+    "outputId": "a703a45d-ac24-4262-b670-a5ec26427792",
+    "scrolled": false
+   },
+   "outputs": [
+    {
+     "data": {
+      "image/png": "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\n",
+      "text/plain": [
+       "<Figure size 576x576 with 1 Axes>"
+      ]
+     },
+     "metadata": {
+      "needs_background": "light"
+     },
+     "output_type": "display_data"
+    }
+   ],
+   "source": [
+    "# визуализируем сгенерированные данные\n",
+    "\n",
+    "plt.figure(figsize=(8,8))\n",
+    "plt.plot(regression_data,regression_data,'.' )\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# визуализируем сгенерированные данные\n",
+    "\n",
+    "colors = ListedColormap(['red', 'blue'])\n",
+    "light_colors = ListedColormap(['lightcoral', 'lightblue'])\n",
+    "\n",
+    "plt.figure(figsize=(16,8))\n",
+    "plt.scatter(list(map(lambda x: x[0], regression_data)), list(map(lambda x: x[1], regression_data)), \n",
+    "              c=regression_labels, cmap=colors)\n",
+    "plt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 26,
+   "metadata": {
+    "id": "Duu45IJUabXi"
+   },
+   "outputs": [],
+   "source": [
+    "# Реализуем класс узла\n",
+    "\n",
+    "class Node:\n",
+    "    \n",
+    "    def __init__(self, index, t, true_branch, false_branch):\n",
+    "        self.index = index  # индекс признака, по которому ведется сравнение с порогом в этом узле\n",
+    "        self.t = t  # значение порога\n",
+    "        self.true_branch = true_branch  # поддерево, удовлетворяющее условию в узле\n",
+    "        self.false_branch = false_branch  # поддерево, не удовлетворяющее условию в узле"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 27,
+   "metadata": {
+    "id": "QY8oNtakabXl"
+   },
+   "outputs": [],
+   "source": [
+    "# И класс терминального узла (листа)\n",
+    "\n",
+    "class Leaf:\n",
+    "    \n",
+    "    def __init__(self, data, labels):\n",
+    "        self.data = data # значения признаков\n",
+    "        self.labels = labels  # y_true\n",
+    "        self.prediction = self.predict()  # y_pred\n",
+    "        \n",
+    "    def predict(self):\n",
+    "        prediction = np.mean(self.labels)\n",
+    "        return prediction"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 28,
+   "metadata": {
+    "id": "uBdli3WDabXn"
+   },
+   "outputs": [],
+   "source": [
+    "# Расчет дисперсии - как критерия нечистоты\n",
+    "\n",
+    "def gini(labels):\n",
+    "    impurity = np.var(labels)     # \"impurity\" - \"нечистота\", степень неопределенности       \n",
+    "    return impurity"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 29,
+   "metadata": {
+    "id": "2EXvl1p7xIcM"
+   },
+   "outputs": [],
+   "source": [
+    "# float(left_labels.shape[0]) / (left_labels.shape[0] + right_labels.shape[0])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 30,
+   "metadata": {
+    "id": "9vvLDhuRabXr"
+   },
+   "outputs": [],
+   "source": [
+    "# Расчет качества\n",
+    "\n",
+    "def quality(left_labels, right_labels, current_gini):\n",
+    "\n",
+    "    # доля выборки, ушедшей в левое поддерево\n",
+    "    p = float(left_labels.shape[0]) / (left_labels.shape[0] + right_labels.shape[0]) # для правого (1-p)\n",
+    "    \n",
+    "    return current_gini - p * gini(left_labels) - (1 - p) * gini(right_labels) # Функционал качества"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 31,
+   "metadata": {
+    "id": "nhWkphi3abXt"
+   },
+   "outputs": [],
+   "source": [
+    "# Разбиение датасета в узле\n",
+    "\n",
+    "def split(data, labels, index, t):\n",
+    "    \n",
+    "    left = np.where(data[:, index] <= t)\n",
+    "    right = np.where(data[:, index] > t)\n",
+    "        \n",
+    "    true_data = data[left]\n",
+    "    false_data = data[right]\n",
+    "    true_labels = labels[left]\n",
+    "    false_labels = labels[right]\n",
+    "        \n",
+    "    return true_data, false_data, true_labels, false_labels"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 32,
+   "metadata": {
+    "id": "5wi8Fbs_abXw"
+   },
+   "outputs": [],
+   "source": [
+    "# Нахождение наилучшего разбиения\n",
+    "\n",
+    "def find_best_split(data, labels):\n",
+    "    \n",
+    "    #  обозначим минимальное количество объектов в узле\n",
+    "    min_leaf = 5\n",
+    "\n",
+    "    current_gini = gini(labels) \n",
+    "\n",
+    "    best_quality = 0\n",
+    "    best_t = None # лучший порог разбиения\n",
+    "    best_index = None # лучший индекс разбиения\n",
+    "    \n",
+    "    n_features = data.shape[1] # кол-во признаков\n",
+    "    \n",
+    "    for index in range(n_features): # проход по всем признакам\n",
+    "        t_values = [row[index] for row in data] # берем столбец/признак с соотв. индексом\n",
+    "        \n",
+    "        for t in t_values: # проход по признаку\n",
+    "            true_data, false_data, true_labels, false_labels = split(data, labels, index, t) # делаем разбиение\n",
+    "            #  пропускаем разбиения, в которых в узле остается менее 5 объектов\n",
+    "            if len(true_data) < min_leaf or len(false_data) < min_leaf:\n",
+    "                continue # начинаем следующий проход цикла, минуя оставшееся тело цикла\n",
+    "            \n",
+    "            # расчет качества текущего разбиения\n",
+    "            current_quality = quality(true_labels, false_labels, current_gini)\n",
+    "            \n",
+    "            #  выбираем порог, на котором получается максимальный прирост качества\n",
+    "            if current_quality > best_quality:\n",
+    "                best_quality, best_t, best_index = current_quality, t, index\n",
+    "\n",
+    "    return best_quality, best_t, best_index"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 33,
+   "metadata": {
+    "id": "f1__qSXSabXy"
+   },
+   "outputs": [],
+   "source": [
+    "# Построение дерева с помощью рекурсивной функции\n",
+    "\n",
+    "def build_tree(data, labels, max_depth, current_depth):\n",
+    "    if (current_depth >=max_depth):\n",
+    "        return Leaf(data, labels)\n",
+    "    quality, t, index = find_best_split(data, labels) # ищем лучшее разбиение\n",
+    "#     print(quality, t, index)\n",
+    "\n",
+    "    #  Базовый случай - прекращаем рекурсию, когда нет прироста в качества\n",
+    "    # неопределенность после разбиения осталась такой же как до\n",
+    "    if quality == 0: # критерий останова\n",
+    "#         print('leaf')\n",
+    "        return Leaf(data, labels) # считаем прогноз для листьев\n",
+    "\n",
+    "    # если качество улучшилось, то делим дерево по лучшему разбиению\n",
+    "    true_data, false_data, true_labels, false_labels = split(data, labels, index, t)\n",
+    "\n",
+    "    # Рекурсивно строим два поддерева\n",
+    "    true_branch = build_tree(true_data, true_labels,max_depth, current_depth+1)\n",
+    "    false_branch = build_tree(false_data, false_labels,max_depth, current_depth+1)\n",
+    "\n",
+    "    # Возвращаем класс узла со всеми поддеревьями, то есть целого дерева\n",
+    "    return Node(index, t, true_branch, false_branch)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 34,
+   "metadata": {
+    "id": "F7ruKazCabX3"
+   },
+   "outputs": [],
+   "source": [
+    "# Проход объекта по дереву для его классификации\n",
+    "\n",
+    "def classify_object(obj, node):\n",
+    "\n",
+    "    #  Останавливаем рекурсию, если достигли листа\n",
+    "    if isinstance(node, Leaf): # проверка текущий узел это лист?\n",
+    "        answer = node.prediction # считаем прогноз для листа\n",
+    "        return answer\n",
+    "\n",
+    "    if obj[node.index] <= node.t: # если значение признака меньше порога t\n",
+    "        return classify_object(obj, node.true_branch) # рекурсия: отправляем объект в true-ветку\n",
+    "    else:\n",
+    "        return classify_object(obj, node.false_branch) # рекурсия: отправляем объект в false-ветку"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 35,
+   "metadata": {
+    "id": "SLOdTAqdabX7"
+   },
+   "outputs": [],
+   "source": [
+    "# Предсказание деревом для всего датасета\n",
+    "\n",
+    "def predict(data, tree):\n",
+    "    \n",
+    "    classes = []\n",
+    "    for obj in data:\n",
+    "        prediction = classify_object(obj, tree) # определяем ветки для объектов\n",
+    "        classes.append(prediction)\n",
+    "    return classes"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 36,
+   "metadata": {
+    "id": "wnDPkwVJabYA"
+   },
+   "outputs": [],
+   "source": [
+    "# Разобьем выборку на обучающую и тестовую\n",
+    "\n",
+    "from sklearn import model_selection\n",
+    "\n",
+    "train_data, test_data, train_labels, test_labels = model_selection.train_test_split(regression_data, \n",
+    "                                                                                     regression_labels, \n",
+    "                                                                                     test_size = 0.3,\n",
+    "                                                                                     random_state = 1)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 37,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/",
+     "height": 100
+    },
+    "id": "UbbvkqvOabYD",
+    "outputId": "b794073b-5b5e-4bfe-f39c-658456375ac0"
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "<__main__.Node object at 0x122d3d730>\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "0"
+      ]
+     },
+     "metadata": {},
+     "output_type": "display_data"
+    },
+    {
+     "data": {
+      "text/plain": [
+       "1.3196605134139388"
+      ]
+     },
+     "metadata": {},
+     "output_type": "display_data"
+    },
+    {
+     "data": {
+      "text/plain": [
+       "<__main__.Node at 0x122d79310>"
+      ]
+     },
+     "metadata": {},
+     "output_type": "display_data"
+    },
+    {
+     "data": {
+      "text/plain": [
+       "<__main__.Node at 0x122d3d340>"
+      ]
+     },
+     "metadata": {},
+     "output_type": "display_data"
+    }
+   ],
+   "source": [
+    "# Построим дерево по обучающей выборке\n",
+    "\n",
+    "max_depth =10#параметр -  максимальной глубины дерева\n",
+    "# 0 - это текущая глубина дерева\n",
+    "my_tree = build_tree(train_data, train_labels, max_depth, 0)\n",
+    "print(my_tree)\n",
+    "display(my_tree.index, my_tree.t, my_tree.true_branch , my_tree.false_branch)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 38,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/"
+    },
+    "id": "GF1rVs9VabYG",
+    "outputId": "2c7db96c-675b-441a-bb41-725e44f99e3e"
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Индекс 0\n",
+      "Порог 1.3196605134139388\n",
+      "--> True:\n",
+      "  Индекс 1\n",
+      "  Порог 0.025975339483530497\n",
+      "  --> True:\n",
+      "    Индекс 0\n",
+      "    Порог 0.25745393919634973\n",
+      "    --> True:\n",
+      "      Индекс 0\n",
+      "      Порог -0.9793386398163768\n",
+      "      --> True:\n",
+      "        Индекс 0\n",
+      "        Порог -2.068894814273062\n",
+      "        --> True:\n",
+      "          Прогноз: 644.453662020209\n",
+      "        --> False:\n",
+      "          Индекс 1\n",
+      "          Порог -1.3562495668818044\n",
+      "          --> True:\n",
+      "            Прогноз: 217.881539434364\n",
+      "          --> False:\n",
+      "            Индекс 1\n",
+      "            Порог -0.8774373773110126\n",
+      "            --> True:\n",
+      "              Прогноз: -688.0752389210269\n",
+      "            --> False:\n",
+      "              Индекс 1\n",
+      "              Порог -0.7046996300358528\n",
+      "              --> True:\n",
+      "                Прогноз: 431.53820928142034\n",
+      "              --> False:\n",
+      "                Индекс 0\n",
+      "                Порог -1.302621431749788\n",
+      "                --> True:\n",
+      "                  Индекс 1\n",
+      "                  Порог -0.42789797573280464\n",
+      "                  --> True:\n",
+      "                    Прогноз: -49.64089478999306\n",
+      "                  --> False:\n",
+      "                    Прогноз: -625.5841397241556\n",
+      "                --> False:\n",
+      "                  Индекс 0\n",
+      "                  Порог -1.192764612421806\n",
+      "                  --> True:\n",
+      "                    Прогноз: 458.4252482427588\n",
+      "                  --> False:\n",
+      "                    Прогноз: -46.84897676105656\n",
+      "      --> False:\n",
+      "        Индекс 1\n",
+      "        Порог -0.9829425041774144\n",
+      "        --> True:\n",
+      "          Индекс 0\n",
+      "          Порог -0.39572583317770293\n",
+      "          --> True:\n",
+      "            Индекс 0\n",
+      "            Порог -0.6105164006371435\n",
+      "            --> True:\n",
+      "              Прогноз: -92.43609500369647\n",
+      "            --> False:\n",
+      "              Прогноз: -831.1282881209557\n",
+      "          --> False:\n",
+      "            Индекс 0\n",
+      "            Порог -0.1688965261579904\n",
+      "            --> True:\n",
+      "              Прогноз: 725.5602113432038\n",
+      "            --> False:\n",
+      "              Индекс 1\n",
+      "              Порог -2.0483965793314445\n",
+      "              --> True:\n",
+      "                Прогноз: -36.32145767041982\n",
+      "              --> False:\n",
+      "                Индекс 0\n",
+      "                Порог -0.006048151410513182\n",
+      "                --> True:\n",
+      "                  Прогноз: -419.0108710724392\n",
+      "                --> False:\n",
+      "                  Прогноз: -225.82651503210238\n",
+      "        --> False:\n",
+      "          Индекс 1\n",
+      "          Порог -0.8196884164288559\n",
+      "          --> True:\n",
+      "            Индекс 1\n",
+      "            Порог -0.8973154227495824\n",
+      "            --> True:\n",
+      "              Прогноз: -686.9159327428287\n",
+      "            --> False:\n",
+      "              Прогноз: -1265.5952773865995\n",
+      "          --> False:\n",
+      "            Индекс 0\n",
+      "            Порог -0.04222753096450967\n",
+      "            --> True:\n",
+      "              Индекс 1\n",
+      "              Порог -0.37333102739969437\n",
+      "              --> True:\n",
+      "                Индекс 0\n",
+      "                Порог -0.7746660781066268\n",
+      "                --> True:\n",
+      "                  Прогноз: -899.8580262714746\n",
+      "                --> False:\n",
+      "                  Индекс 0\n",
+      "                  Порог -0.4039924696397172\n",
+      "                  --> True:\n",
+      "                    Прогноз: 150.86378547550467\n",
+      "                  --> False:\n",
+      "                    Прогноз: -571.723306127291\n",
+      "              --> False:\n",
+      "                Индекс 1\n",
+      "                Порог -0.2652861789650052\n",
+      "                --> True:\n",
+      "                  Прогноз: -1531.2213733898975\n",
+      "                --> False:\n",
+      "                  Индекс 0\n",
+      "                  Порог -0.7250433158813809\n",
+      "                  --> True:\n",
+      "                    Прогноз: 40.23546189516372\n",
+      "                  --> False:\n",
+      "                    Прогноз: -749.1950298330703\n",
+      "            --> False:\n",
+      "              Индекс 0\n",
+      "              Порог 0.2091621161267067\n",
+      "              --> True:\n",
+      "                Индекс 1\n",
+      "                Порог -0.2667077673051246\n",
+      "                --> True:\n",
+      "                  Индекс 1\n",
+      "                  Порог -0.573090702601345\n",
+      "                  --> True:\n",
+      "                    Прогноз: -333.6622381078411\n",
+      "                  --> False:\n",
+      "                    Прогноз: 1026.750347499091\n",
+      "                --> False:\n",
+      "                  Индекс 0\n",
+      "                  Порог 0.06226132154989981\n",
+      "                  --> True:\n",
+      "                    Прогноз: -516.7082373986283\n",
+      "                  --> False:\n",
+      "                    Прогноз: 32.012494630418274\n",
+      "              --> False:\n",
+      "                Прогноз: -1098.2458242173866\n",
+      "    --> False:\n",
+      "      Индекс 0\n",
+      "      Порог 1.1932237686538003\n",
+      "      --> True:\n",
+      "        Индекс 1\n",
+      "        Порог -0.05485573574992602\n",
+      "        --> True:\n",
+      "          Индекс 1\n",
+      "          Порог -0.1891539966932254\n",
+      "          --> True:\n",
+      "            Индекс 1\n",
+      "            Порог -1.1686373396216279\n",
+      "            --> True:\n",
+      "              Индекс 1\n",
+      "              Порог -1.2933927370344738\n",
+      "              --> True:\n",
+      "                Индекс 1\n",
+      "                Порог -2.066990119184768\n",
+      "                --> True:\n",
+      "                  Прогноз: 733.3044246318001\n",
+      "                --> False:\n",
+      "                  Индекс 0\n",
+      "                  Порог 0.803083132185227\n",
+      "                  --> True:\n",
+      "                    Прогноз: -22.593009482678575\n",
+      "                  --> False:\n",
+      "                    Прогноз: -238.5357578216529\n",
+      "              --> False:\n",
+      "                Прогноз: 834.2213076136815\n",
+      "            --> False:\n",
+      "              Индекс 1\n",
+      "              Порог -0.28749660960720785\n",
+      "              --> True:\n",
+      "                Индекс 1\n",
+      "                Порог -0.9321611305688816\n",
+      "                --> True:\n",
+      "                  Индекс 1\n",
+      "                  Порог -1.0246845857826614\n",
+      "                  --> True:\n",
+      "                    Прогноз: 76.62229864642264\n",
+      "                  --> False:\n",
+      "                    Прогноз: -546.8732630030318\n",
+      "                --> False:\n",
+      "                  Индекс 1\n",
+      "                  Порог -0.8437692453254058\n",
+      "                  --> True:\n",
+      "                    Прогноз: 645.3869695689409\n",
+      "                  --> False:\n",
+      "                    Прогноз: 16.507500212166512\n",
+      "              --> False:\n",
+      "                Индекс 0\n",
+      "                Порог 0.8209428253711426\n",
+      "                --> True:\n",
+      "                  Прогноз: -80.03555394595885\n",
+      "                --> False:\n",
+      "                  Прогноз: -853.7127540026602\n",
+      "          --> False:\n",
+      "            Индекс 0\n",
+      "            Порог 0.7501106764093389\n",
+      "            --> True:\n",
+      "              Прогноз: 434.0220196709971\n",
+      "            --> False:\n",
+      "              Прогноз: 1199.239771122746\n",
+      "        --> False:\n",
+      "          Прогноз: -640.8645626805725\n",
+      "      --> False:\n",
+      "        Прогноз: -939.7032531277645\n",
+      "  --> False:\n",
+      "    Индекс 0\n",
+      "    Порог 0.94326938854861\n",
+      "    --> True:\n",
+      "      Индекс 1\n",
+      "      Порог 0.8220632032012296\n",
+      "      --> True:\n",
+      "        Индекс 0\n",
+      "        Порог 0.2678322442158283\n",
+      "        --> True:\n",
+      "          Индекс 0\n",
+      "          Порог -0.844739076493262\n",
+      "          --> True:\n",
+      "            Индекс 1\n",
+      "            Порог 0.7536900689444221\n",
+      "            --> True:\n",
+      "              Индекс 1\n",
+      "              Порог 0.6645361748521891\n",
+      "              --> True:\n",
+      "                Индекс 0\n",
+      "                Порог -1.6170111916956476\n",
+      "                --> True:\n",
+      "                  Прогноз: 352.77385316492195\n",
+      "                --> False:\n",
+      "                  Индекс 1\n",
+      "                  Порог 0.16652727972656808\n",
+      "                  --> True:\n",
+      "                    Прогноз: 197.6286027330837\n",
+      "                  --> False:\n",
+      "                    Прогноз: -118.48930501596993\n",
+      "              --> False:\n",
+      "                Прогноз: -883.3519867401712\n",
+      "            --> False:\n",
+      "              Прогноз: 563.7663170626264\n",
+      "          --> False:\n",
+      "            Индекс 0\n",
+      "            Порог -0.5570962912377644\n",
+      "            --> True:\n",
+      "              Индекс 0\n",
+      "              Порог -0.6463565855238054\n",
+      "              --> True:\n",
+      "                Прогноз: 429.6981737229032\n",
+      "              --> False:\n",
+      "                Прогноз: 1391.4396446750084\n",
+      "            --> False:\n",
+      "              Индекс 0\n",
+      "              Порог 0.20716614270414033\n",
+      "              --> True:\n",
+      "                Индекс 1\n",
+      "                Порог 0.26086376140163936\n",
+      "                --> True:\n",
+      "                  Индекс 1\n",
+      "                  Порог 0.07609759858767655\n",
+      "                  --> True:\n",
+      "                    Прогноз: -43.05191201892493\n",
+      "                  --> False:\n",
+      "                    Прогноз: 931.4540506216413\n",
+      "                --> False:\n",
+      "                  Индекс 0\n",
+      "                  Порог -0.3588289470012431\n",
+      "                  --> True:\n",
+      "                    Прогноз: -446.65058482304147\n",
+      "                  --> False:\n",
+      "                    Прогноз: 59.12743136887165\n",
+      "              --> False:\n",
+      "                Прогноз: 882.8475846277258\n",
+      "        --> False:\n",
+      "          Индекс 0\n",
+      "          Порог 0.6340229056398426\n",
+      "          --> True:\n",
+      "            Индекс 1\n",
+      "            Порог 0.13975270614845833\n",
+      "            --> True:\n",
+      "              Прогноз: 540.2957067538088\n",
+      "            --> False:\n",
+      "              Индекс 1\n",
+      "              Порог 0.7042332998757914\n",
+      "              --> True:\n",
+      "                Индекс 0\n",
+      "                Порог 0.4186739913482827\n",
+      "                --> True:\n",
+      "                  Индекс 1\n",
+      "                  Порог 0.36409296524981116\n",
+      "                  --> True:\n",
+      "                    Прогноз: -664.0869184499604\n",
+      "                  --> False:\n",
+      "                    Прогноз: -25.098415280188895\n",
+      "                --> False:\n",
+      "                  Индекс 0\n",
+      "                  Порог 0.5427690277699994\n",
+      "                  --> True:\n",
+      "                    Прогноз: -1415.9901941619798\n",
+      "                  --> False:\n",
+      "                    Прогноз: -749.8407081699256\n",
+      "              --> False:\n",
+      "                Прогноз: 321.94367718319626\n",
+      "          --> False:\n",
+      "            Индекс 1\n",
+      "            Порог 0.2874036450384292\n",
+      "            --> True:\n",
+      "              Прогноз: -192.20217881844508\n",
+      "            --> False:\n",
+      "              Индекс 1\n",
+      "              Порог 0.5058397918952761\n",
+      "              --> True:\n",
+      "                Прогноз: 1465.630366027994\n",
+      "              --> False:\n",
+      "                Прогноз: 140.89018779680805\n",
+      "      --> False:\n",
+      "        Индекс 1\n",
+      "        Порог 1.1605590114481037\n",
+      "        --> True:\n",
+      "          Индекс 0\n",
+      "          Порог -0.5570506480946342\n",
+      "          --> True:\n",
+      "            Индекс 0\n",
+      "            Порог -1.357344782173527\n",
+      "            --> True:\n",
+      "              Прогноз: -587.641801983856\n",
+      "            --> False:\n",
+      "              Индекс 0\n",
+      "              Порог -0.8999425463171702\n",
+      "              --> True:\n",
+      "                Прогноз: 323.66044578482195\n",
+      "              --> False:\n",
+      "                Прогноз: 12.34317337954003\n",
+      "          --> False:\n",
+      "            Индекс 0\n",
+      "            Порог -0.06681057290022181\n",
+      "            --> True:\n",
+      "              Прогноз: -1029.90245358067\n",
+      "            --> False:\n",
+      "              Индекс 0\n",
+      "              Порог 0.5353397428003663\n",
+      "              --> True:\n",
+      "                Индекс 0\n",
+      "                Порог 0.18859568481833927\n",
+      "                --> True:\n",
+      "                  Индекс 0\n",
+      "                  Порог 0.07414337771439142\n",
+      "                  --> True:\n",
+      "                    Прогноз: -307.4665100566069\n",
+      "                  --> False:\n",
+      "                    Прогноз: -815.072627008841\n",
+      "                --> False:\n",
+      "                  Прогноз: 211.49213002151774\n",
+      "              --> False:\n",
+      "                Прогноз: -623.2102860346255\n",
+      "        --> False:\n",
+      "          Индекс 0\n",
+      "          Порог -0.05743985983902545\n",
+      "          --> True:\n",
+      "            Индекс 1\n",
+      "            Порог 1.610382565004817\n",
+      "            --> True:\n",
+      "              Индекс 0\n",
+      "              Порог -0.9364494065924441\n",
+      "              --> True:\n",
+      "                Прогноз: 620.852040476925\n",
+      "              --> False:\n",
+      "                Индекс 0\n",
+      "                Порог -0.4865368780415053\n",
+      "                --> True:\n",
+      "                  Прогноз: -559.028274389399\n",
+      "                --> False:\n",
+      "                  Прогноз: -26.906089126678832\n",
+      "            --> False:\n",
+      "              Индекс 1\n",
+      "              Порог 1.8160926664617423\n",
+      "              --> True:\n",
+      "                Прогноз: -1022.0280090262107\n",
+      "              --> False:\n",
+      "                Индекс 1\n",
+      "                Порог 2.1697615925507185\n",
+      "                --> True:\n",
+      "                  Прогноз: -267.1485583742741\n",
+      "                --> False:\n",
+      "                  Прогноз: -14.533891398862647\n",
+      "          --> False:\n",
+      "            Индекс 1\n",
+      "            Порог 1.3478958451288614\n",
+      "            --> True:\n",
+      "              Прогноз: -158.33112802579134\n",
+      "            --> False:\n",
+      "              Индекс 1\n",
+      "              Порог 1.6900060375742072\n",
+      "              --> True:\n",
+      "                Прогноз: 987.3819315761241\n",
+      "              --> False:\n",
+      "                Индекс 0\n",
+      "                Порог 0.39059683390065\n",
+      "                --> True:\n",
+      "                  Прогноз: 547.7296820930167\n",
+      "                --> False:\n",
+      "                  Прогноз: 143.52879617258756\n",
+      "    --> False:\n",
+      "      Индекс 0\n",
+      "      Порог 1.0753068886108148\n",
+      "      --> True:\n",
+      "        Индекс 1\n",
+      "        Порог 0.6655565514554597\n",
+      "        --> True:\n",
+      "          Прогноз: -1040.4425932083973\n",
+      "        --> False:\n",
+      "          Прогноз: -835.2036747163077\n",
+      "      --> False:\n",
+      "        Индекс 1\n",
+      "        Порог 0.29921611740098575\n",
+      "        --> True:\n",
+      "          Прогноз: 351.8483813031928\n",
+      "        --> False:\n",
+      "          Индекс 1\n",
+      "          Порог 0.578195627053209\n",
+      "          --> True:\n",
+      "            Прогноз: -896.3608047403487\n",
+      "          --> False:\n",
+      "            Прогноз: 148.73956831958628\n",
+      "--> False:\n",
+      "  Индекс 1\n",
+      "  Порог 0.5732216094529329\n",
+      "  --> True:\n",
+      "    Индекс 1\n",
+      "    Порог 0.18742819401190827\n",
+      "    --> True:\n",
+      "      Индекс 1\n",
+      "      Порог -0.9352656917153396\n",
+      "      --> True:\n",
+      "        Индекс 1\n",
+      "        Порог -1.26282019938627\n",
+      "        --> True:\n",
+      "          Прогноз: -234.9751559501172\n",
+      "        --> False:\n",
+      "          Прогноз: 198.36596477977312\n",
+      "      --> False:\n",
+      "        Индекс 1\n",
+      "        Порог -0.18587577294252736\n",
+      "        --> True:\n",
+      "          Индекс 0\n",
+      "          Порог 1.759653413547532\n",
+      "          --> True:\n",
+      "            Прогноз: 1034.264755793043\n",
+      "          --> False:\n",
+      "            Прогноз: 338.3244216496342\n",
+      "        --> False:\n",
+      "          Прогноз: 128.58386911692344\n",
+      "    --> False:\n",
+      "      Индекс 1\n",
+      "      Порог 0.35470560021053843\n",
+      "      --> True:\n",
+      "        Прогноз: 1480.031507003942\n",
+      "      --> False:\n",
+      "        Прогноз: 755.1997523586915\n",
+      "  --> False:\n",
+      "    Прогноз: -182.8818396926984\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Напечатаем ход нашего дерева\n",
+    "def print_tree(node, spacing=\"\"):\n",
+    "\n",
+    "    # Если лист, то выводим его прогноз\n",
+    "    if isinstance(node, Leaf):\n",
+    "        print(spacing + \"Прогноз:\", node.prediction)\n",
+    "        return\n",
+    "\n",
+    "    # Выведем значение индекса и порога на этом узле\n",
+    "    print(spacing + 'Индекс', str(node.index))\n",
+    "    print(spacing + 'Порог', str(node.t))\n",
+    "\n",
+    "    # Рекурсионный вызов функции на положительном поддереве\n",
+    "    print (spacing + '--> True:')\n",
+    "    print_tree(node.true_branch, spacing + \"  \")\n",
+    "\n",
+    "    # Рекурсионный вызов функции на отрицательном поддереве\n",
+    "    print (spacing + '--> False:')\n",
+    "    print_tree(node.false_branch, spacing + \"  \")\n",
+    "    \n",
+    "print_tree(my_tree)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 39,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/"
+    },
+    "id": "CyvzFQp3abYI",
+    "outputId": "905b88b1-0df6-40a8-a215-550aca0c7cb6"
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "[-640.8645626805725,\n",
+       " 882.8475846277258,\n",
+       " 16.507500212166512,\n",
+       " 1026.750347499091,\n",
+       " -238.5357578216529]"
+      ]
+     },
+     "execution_count": 39,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Получим ответы для обучающей выборки \n",
+    "train_answers = predict(train_data, my_tree)\n",
+    "train_answers[:5]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 40,
+   "metadata": {
+    "id": "Rl6IyN8yabYN"
+   },
+   "outputs": [],
+   "source": [
+    "# И получим ответы для тестовой выборки\n",
+    "answers = predict(test_data, my_tree)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "id": "-vjPDt1DxIcR"
+   },
+   "source": [
+    "Accuracy = расчет *доли правильных ответов*:\n",
+    "\n",
+    "$$accuracy(a,x) = \\frac{1}{l} \\sum^{l}_{i=1}[a(x_{i})=y_{i}].$$"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 41,
+   "metadata": {
+    "id": "2odXAe7vabYP"
+   },
+   "outputs": [],
+   "source": [
+    "# Введем функцию подсчета точности как доли правильных ответов\n",
+    "def accuracy_metric(actual, predicted):\n",
+    "    correct = 0\n",
+    "    for i in range(len(actual)):\n",
+    "        if actual[i] == predicted[i]:\n",
+    "            correct += 1\n",
+    "    return correct / float(len(actual)) * 100.0"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 42,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/"
+    },
+    "id": "Jn0L6r8CabYS",
+    "outputId": "aaa8fd14-23a0-4b97-d91d-81edc866a8ba"
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "0.0"
+      ]
+     },
+     "execution_count": 42,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Точность на обучающей выборке\n",
+    "train_accuracy = accuracy_metric(train_labels, train_answers)\n",
+    "train_accuracy"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 43,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/"
+    },
+    "id": "D__eGtLRabYU",
+    "outputId": "1b29e6de-6515-41ad-89e7-57c40bd6c2bf"
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "0.0"
+      ]
+     },
+     "execution_count": 43,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Точность на тестовой выборке\n",
+    "test_accuracy = accuracy_metric(test_labels, answers)\n",
+    "test_accuracy"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 49,
+   "metadata": {
+    "id": "JFamWogp7cKU"
+   },
+   "outputs": [],
+   "source": [
+    "from sklearn.tree import DecisionTreeRegressor"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 50,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/"
+    },
+    "id": "fXkZTaYh7d-m",
+    "outputId": "12accb88-4858-4f3b-920a-bcc8b0b765e0"
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "DecisionTreeRegressor(max_depth=6, random_state=0)"
+      ]
+     },
+     "execution_count": 50,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "reg = DecisionTreeRegressor(random_state=0, max_depth=6)\n",
+    "reg.fit(train_data, train_labels)\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 51,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/"
+    },
+    "id": "GxxFjhUO8XSr",
+    "outputId": "8ebbccfe-1fe6-491e-ccf1-126e6e98d6ca"
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "(1.8571428571428572, 0.0)"
+      ]
+     },
+     "execution_count": 51,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Точность на обучающей выборке\n",
+    "train_accuracy_s = accuracy_metric(train_labels,reg.predict(train_data))\n",
+    "train_accuracy_s,train_accuracy"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 52,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/"
+    },
+    "id": "axdLLZWW8Emq",
+    "outputId": "0f582a73-8525-438f-f74f-89c2eb553f37"
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "(0.0, 0.0)"
+      ]
+     },
+     "execution_count": 52,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Точность на тестовой выборке\n",
+    "test_accuracy_s = accuracy_metric(test_labels,reg.predict(test_data))\n",
+    "test_accuracy_s,test_accuracy"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 55,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/",
+     "height": 1000
+    },
+    "id": "S75azOyy-jkG",
+    "outputId": "f69fa319-9353-4e0f-d565-8883c9b674f9"
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "[Text(177.66509433962264, 201.90857142857143, 'X[0] <= 1.331\\nmse = 1011706.588\\nsamples = 700\\nvalue = -56.312'),\n",
+       " Text(94.75471698113208, 170.84571428571428, 'X[0] <= -2.924\\nmse = 996283.082\\nsamples = 643\\nvalue = -105.182'),\n",
+       " Text(88.43773584905661, 139.78285714285715, 'mse = 0.0\\nsamples = 1\\nvalue = 2023.604'),\n",
+       " Text(101.07169811320755, 139.78285714285715, 'X[1] <= 0.028\\nmse = 990765.16\\nsamples = 642\\nvalue = -108.498'),\n",
+       " Text(50.53584905660377, 108.72, 'X[0] <= 0.26\\nmse = 962623.631\\nsamples = 335\\nvalue = -190.579'),\n",
+       " Text(25.267924528301887, 77.65714285714284, 'X[0] <= -0.969\\nmse = 878151.811\\nsamples = 218\\nvalue = -309.851'),\n",
+       " Text(12.633962264150943, 46.59428571428572, 'X[1] <= 0.012\\nmse = 854056.583\\nsamples = 61\\nvalue = -65.484'),\n",
+       " Text(6.316981132075472, 15.531428571428563, 'mse = 839886.72\\nsamples = 60\\nvalue = -43.905'),\n",
+       " Text(18.950943396226414, 15.531428571428563, 'mse = -0.0\\nsamples = 1\\nvalue = -1360.208'),\n",
+       " Text(37.90188679245283, 46.59428571428572, 'X[1] <= -0.957\\nmse = 855297.524\\nsamples = 157\\nvalue = -404.797'),\n",
+       " Text(31.58490566037736, 15.531428571428563, 'mse = 779556.915\\nsamples = 40\\nvalue = -150.841'),\n",
+       " Text(44.218867924528304, 15.531428571428563, 'mse = 851604.653\\nsamples = 117\\nvalue = -491.619'),\n",
+       " Text(75.80377358490566, 77.65714285714284, 'X[0] <= 1.194\\nmse = 1044121.586\\nsamples = 117\\nvalue = 31.654'),\n",
+       " Text(63.16981132075472, 46.59428571428572, 'X[0] <= 1.178\\nmse = 982171.177\\nsamples = 110\\nvalue = 93.468'),\n",
+       " Text(56.85283018867924, 15.531428571428563, 'mse = 966369.872\\nsamples = 107\\nvalue = 61.267'),\n",
+       " Text(69.48679245283019, 15.531428571428563, 'mse = 189692.156\\nsamples = 3\\nvalue = 1241.978'),\n",
+       " Text(88.43773584905661, 46.59428571428572, 'X[1] <= -1.662\\nmse = 1014049.248\\nsamples = 7\\nvalue = -939.703'),\n",
+       " Text(82.12075471698112, 15.531428571428563, 'mse = 0.0\\nsamples = 1\\nvalue = -2578.0'),\n",
+       " Text(94.75471698113208, 15.531428571428563, 'mse = 661165.233\\nsamples = 6\\nvalue = -666.654'),\n",
+       " Text(151.6075471698113, 108.72, 'X[0] <= 0.947\\nmse = 1006099.167\\nsamples = 307\\nvalue = -18.93'),\n",
+       " Text(126.33962264150944, 77.65714285714284, 'X[1] <= 0.824\\nmse = 993316.03\\nsamples = 273\\nvalue = 25.19'),\n",
+       " Text(113.70566037735848, 46.59428571428572, 'X[0] <= 0.287\\nmse = 1067371.077\\nsamples = 154\\nvalue = 152.138'),\n",
+       " Text(107.38867924528302, 15.531428571428563, 'mse = 991467.954\\nsamples = 109\\nvalue = 241.482'),\n",
+       " Text(120.02264150943397, 15.531428571428563, 'mse = 1185056.588\\nsamples = 45\\nvalue = -64.273'),\n",
+       " Text(138.97358490566037, 46.59428571428572, 'X[1] <= 1.164\\nmse = 849634.838\\nsamples = 119\\nvalue = -139.095'),\n",
+       " Text(132.6566037735849, 15.531428571428563, 'mse = 742846.541\\nsamples = 55\\nvalue = -388.154'),\n",
+       " Text(145.29056603773586, 15.531428571428563, 'mse = 842287.375\\nsamples = 64\\nvalue = 74.94'),\n",
+       " Text(176.87547169811322, 77.65714285714284, 'X[0] <= 1.083\\nmse = 967609.387\\nsamples = 34\\nvalue = -373.191'),\n",
+       " Text(164.24150943396225, 46.59428571428572, 'X[0] <= 0.954\\nmse = 620707.762\\nsamples = 11\\nvalue = -947.152'),\n",
+       " Text(157.9245283018868, 15.531428571428563, 'mse = 0.0\\nsamples = 1\\nvalue = -2214.445'),\n",
+       " Text(170.55849056603773, 15.531428571428563, 'mse = 506115.095\\nsamples = 10\\nvalue = -820.423'),\n",
+       " Text(189.50943396226415, 46.59428571428572, 'X[1] <= 0.255\\nmse = 900612.754\\nsamples = 23\\nvalue = -98.688'),\n",
+       " Text(183.19245283018867, 15.531428571428563, 'mse = 433765.122\\nsamples = 4\\nvalue = 743.375'),\n",
+       " Text(195.8264150943396, 15.531428571428563, 'mse = 818191.675\\nsamples = 19\\nvalue = -275.964'),\n",
+       " Text(260.5754716981132, 170.84571428571428, 'X[1] <= -2.414\\nmse = 854829.249\\nsamples = 57\\nvalue = 494.981'),\n",
+       " Text(254.25849056603772, 139.78285714285715, 'mse = 0.0\\nsamples = 1\\nvalue = -1735.824'),\n",
+       " Text(266.8924528301887, 139.78285714285715, 'X[1] <= 0.589\\nmse = 779641.273\\nsamples = 56\\nvalue = 534.817'),\n",
+       " Text(230.56981132075472, 108.72, 'X[1] <= 0.201\\nmse = 708931.091\\nsamples = 48\\nvalue = 654.433'),\n",
+       " Text(208.46037735849058, 77.65714285714284, 'X[1] <= -1.854\\nmse = 681972.584\\nsamples = 34\\nvalue = 421.074'),\n",
+       " Text(202.1433962264151, 46.59428571428572, 'mse = 0.0\\nsamples = 1\\nvalue = 1506.983'),\n",
+       " Text(214.77735849056603, 46.59428571428572, 'X[1] <= -1.386\\nmse = 665822.269\\nsamples = 33\\nvalue = 388.167'),\n",
+       " Text(208.46037735849058, 15.531428571428563, 'mse = 44558.431\\nsamples = 2\\nvalue = -780.752'),\n",
+       " Text(221.0943396226415, 15.531428571428563, 'mse = 612063.398\\nsamples = 31\\nvalue = 463.582'),\n",
+       " Text(252.67924528301887, 77.65714285714284, 'X[1] <= 0.491\\nmse = 320967.323\\nsamples = 14\\nvalue = 1221.163'),\n",
+       " Text(240.04528301886793, 46.59428571428572, 'X[0] <= 1.629\\nmse = 209056.859\\nsamples = 12\\nvalue = 1374.085'),\n",
+       " Text(233.72830188679245, 15.531428571428563, 'mse = 66434.923\\nsamples = 7\\nvalue = 1616.49'),\n",
+       " Text(246.3622641509434, 15.531428571428563, 'mse = 211292.182\\nsamples = 5\\nvalue = 1034.717'),\n",
+       " Text(265.3132075471698, 46.59428571428572, 'X[1] <= 0.542\\nmse = 10260.936\\nsamples = 2\\nvalue = 303.634'),\n",
+       " Text(258.9962264150943, 15.531428571428563, 'mse = 0.0\\nsamples = 1\\nvalue = 202.338'),\n",
+       " Text(271.6301886792453, 15.531428571428563, 'mse = -0.0\\nsamples = 1\\nvalue = 404.93'),\n",
+       " Text(303.2150943396226, 108.72, 'X[0] <= 1.549\\nmse = 602962.563\\nsamples = 8\\nvalue = -182.882'),\n",
+       " Text(284.2641509433962, 77.65714285714284, 'X[1] <= 0.606\\nmse = 299837.99\\nsamples = 3\\nvalue = -927.496'),\n",
+       " Text(277.94716981132075, 46.59428571428572, 'mse = 0.0\\nsamples = 1\\nvalue = -192.049'),\n",
+       " Text(290.5811320754717, 46.59428571428572, 'X[0] <= 1.438\\nmse = 44095.69\\nsamples = 2\\nvalue = -1295.219'),\n",
+       " Text(284.2641509433962, 15.531428571428563, 'mse = 0.0\\nsamples = 1\\nvalue = -1085.229'),\n",
+       " Text(296.89811320754717, 15.531428571428563, 'mse = 0.0\\nsamples = 1\\nvalue = -1505.209'),\n",
+       " Text(322.16603773584905, 77.65714285714284, 'X[0] <= 2.634\\nmse = 252565.456\\nsamples = 5\\nvalue = 263.886'),\n",
+       " Text(315.8490566037736, 46.59428571428572, 'X[0] <= 1.985\\nmse = 89646.199\\nsamples = 4\\nvalue = 51.255'),\n",
+       " Text(309.53207547169814, 15.531428571428563, 'mse = 32587.671\\nsamples = 3\\nvalue = 198.684'),\n",
+       " Text(322.16603773584905, 15.531428571428563, 'mse = 0.0\\nsamples = 1\\nvalue = -391.03'),\n",
+       " Text(328.4830188679245, 46.59428571428572, 'mse = 0.0\\nsamples = 1\\nvalue = 1114.412')]"
+      ]
+     },
+     "execution_count": 55,
+     "metadata": {},
+     "output_type": "execute_result"
+    },
+    {
+     "data": {
+      "image/png": "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\n",
+      "text/plain": [
+       "<Figure size 432x288 with 1 Axes>"
+      ]
+     },
+     "metadata": {
+      "needs_background": "light"
+     },
+     "output_type": "display_data"
+    }
+   ],
+   "source": [
+    "from sklearn import tree\n",
+    "\n",
+    "tree.plot_tree(reg) "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 56,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/",
+     "height": 914
+    },
+    "id": "2QZc6ZTJ_C5E",
+    "outputId": "6aa31cbe-c5e3-43c6-c9bc-956314ebf70b"
+   },
+   "outputs": [
+    {
+     "ename": "ValueError",
+     "evalue": "Length of feature_names, 1 does not match number of features, 2",
+     "output_type": "error",
+     "traceback": [
+      "\u001b[0;31m---------------------------------------------------------------------------\u001b[0m",
+      "\u001b[0;31mValueError\u001b[0m                                Traceback (most recent call last)",
+      "\u001b[0;32m<ipython-input-56-a93cf89f4f11>\u001b[0m in \u001b[0;36m<module>\u001b[0;34m\u001b[0m\n\u001b[0;32m----> 1\u001b[0;31m \u001b[0mdot_data\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mtree\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mexport_graphviz\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mreg\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mout_file\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0;32mNone\u001b[0m\u001b[0;34m,\u001b[0m\u001b[0mfeature_names\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0;34m[\u001b[0m\u001b[0;34m'X0'\u001b[0m\u001b[0;34m]\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mfilled\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0;32mTrue\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mrounded\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0;32mTrue\u001b[0m\u001b[0;34m,\u001b[0m\u001b[0mspecial_characters\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0;32mTrue\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m      2\u001b[0m \u001b[0mgraph\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mgraphviz\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mSource\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mdot_data\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m      3\u001b[0m \u001b[0mgraph\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/opt/anaconda3/lib/python3.8/site-packages/sklearn/utils/validation.py\u001b[0m in \u001b[0;36minner_f\u001b[0;34m(*args, **kwargs)\u001b[0m\n\u001b[1;32m     61\u001b[0m             \u001b[0mextra_args\u001b[0m \u001b[0;34m=\u001b[0m \u001b[0mlen\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0margs\u001b[0m\u001b[0;34m)\u001b[0m \u001b[0;34m-\u001b[0m \u001b[0mlen\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mall_args\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     62\u001b[0m             \u001b[0;32mif\u001b[0m \u001b[0mextra_args\u001b[0m \u001b[0;34m<=\u001b[0m \u001b[0;36m0\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m---> 63\u001b[0;31m                 \u001b[0;32mreturn\u001b[0m \u001b[0mf\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0;34m*\u001b[0m\u001b[0margs\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0;34m**\u001b[0m\u001b[0mkwargs\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m     64\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m     65\u001b[0m             \u001b[0;31m# extra_args > 0\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/opt/anaconda3/lib/python3.8/site-packages/sklearn/tree/_export.py\u001b[0m in \u001b[0;36mexport_graphviz\u001b[0;34m(decision_tree, out_file, max_depth, feature_names, class_names, label, filled, leaves_parallel, impurity, node_ids, proportion, rotate, rounded, special_characters, precision)\u001b[0m\n\u001b[1;32m    786\u001b[0m             \u001b[0mrounded\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0mrounded\u001b[0m\u001b[0;34m,\u001b[0m \u001b[0mspecial_characters\u001b[0m\u001b[0;34m=\u001b[0m\u001b[0mspecial_characters\u001b[0m\u001b[0;34m,\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    787\u001b[0m             precision=precision)\n\u001b[0;32m--> 788\u001b[0;31m         \u001b[0mexporter\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mexport\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mdecision_tree\u001b[0m\u001b[0;34m)\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m\u001b[1;32m    789\u001b[0m \u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    790\u001b[0m         \u001b[0;32mif\u001b[0m \u001b[0mreturn_string\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n",
+      "\u001b[0;32m~/opt/anaconda3/lib/python3.8/site-packages/sklearn/tree/_export.py\u001b[0m in \u001b[0;36mexport\u001b[0;34m(self, decision_tree)\u001b[0m\n\u001b[1;32m    412\u001b[0m         \u001b[0;32mif\u001b[0m \u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mfeature_names\u001b[0m \u001b[0;32mis\u001b[0m \u001b[0;32mnot\u001b[0m \u001b[0;32mNone\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    413\u001b[0m             \u001b[0;32mif\u001b[0m \u001b[0mlen\u001b[0m\u001b[0;34m(\u001b[0m\u001b[0mself\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mfeature_names\u001b[0m\u001b[0;34m)\u001b[0m \u001b[0;34m!=\u001b[0m \u001b[0mdecision_tree\u001b[0m\u001b[0;34m.\u001b[0m\u001b[0mn_features_\u001b[0m\u001b[0;34m:\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0;32m--> 414\u001b[0;31m                 raise ValueError(\"Length of feature_names, %d \"\n\u001b[0m\u001b[1;32m    415\u001b[0m                                  \u001b[0;34m\"does not match number of features, %d\"\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[1;32m    416\u001b[0m                                  % (len(self.feature_names),\n",
+      "\u001b[0;31mValueError\u001b[0m: Length of feature_names, 1 does not match number of features, 2"
+     ]
+    }
+   ],
+   "source": [
+    "dot_data = tree.export_graphviz(reg, out_file=None,feature_names=['X0'], filled=True, rounded=True,special_characters=True)  \n",
+    "graph = graphviz.Source(dot_data)  \n",
+    "graph "
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "id": "fuInidP3abYh"
+   },
+   "source": [
+    "## Дополнительные материалы"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "id": "qlxrQi3-abYh"
+   },
+   "source": [
+    "1. [Энтропия](https://habr.com/ru/post/305794/)\n",
+    "2. [Энтропия - теоретическое обоснование](https://ru.wikipedia.org/wiki/%D0%98%D0%BD%D1%84%D0%BE%D1%80%D0%BC%D0%B0%D1%86%D0%B8%D0%BE%D0%BD%D0%BD%D0%B0%D1%8F_%D1%8D%D0%BD%D1%82%D1%80%D0%BE%D0%BF%D0%B8%D1%8F)\n",
+    "3. [Cost-Complexity Pruning](http://mlwiki.org/index.php/Cost-Complexity_Pruning)\n",
+    "4. [Реализация дерева решений в функциональном стиле](https://github.com/random-forests/tutorials/blob/master/decision_tree.ipynb)\n",
+    "5. [ООП-реализация дерева решений](https://github.com/curiousily/Machine-Learning-from-Scratch/blob/master/3_decision_trees.ipynb)\n",
+    "6. [Пример работы дерева решений в задаче регрессии](https://habr.com/ru/company/ods/blog/322534/#derevo-resheniy-v-zadache-regressii)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "id": "7VbujEWdxIcX"
+   },
+   "source": [
+    "## Summary"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "id": "KljmNEmyxIcX"
+   },
+   "source": [
+    "* Решающее дерево - последовательное построение узлов, разбивающих множество входящих объектов согласно принципу минимизации “нечистоты” (impurity) узла\n",
+    "* Предикаты для разбиения в узле выбираются из всего множества признаков\n",
+    "* Деревья могут легко переобучиться под выборку, если не ограничивать их глубину\n",
+    "* Деревья очень чувствительны к небольшим изменениям в выборке (шумам)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {
+    "id": "LswCHW1HLQod"
+   },
+   "source": [
+    "## Домашнее задание\n",
+    "\n",
+    "\n",
+    "1. В коде из методички реализуйте один или несколько из критериев останова (количество листьев, количество используемых признаков, глубина дерева и т.д.)\n",
+    "2. Реализуйте дерево для задачи регрессии. Возьмите за основу дерево, реализованное в методичке, заменив механизм предсказания в листе на взятие среднего значения по выборке, и критерий Джини на дисперсию значений."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "id": "CspMnERkLUPy"
+   },
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "colab": {
+   "collapsed_sections": [],
+   "name": "Lesson_4_7_09.ipynb",
+   "provenance": []
+  },
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.8.5"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 1
+}
