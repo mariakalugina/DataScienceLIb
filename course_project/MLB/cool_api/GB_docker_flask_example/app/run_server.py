@@ -32,8 +32,8 @@ def load_model(model_path):
 		model = model_dict['model']
 	print(model)
 
-#modelpath = "/app/app/models/heart_decease_pipeline.dill"
-modelpath = '/Users/maria/Documents/GeekBrains/ML_Business/MLB_courseproject/models/heart_decease_pipeline.dill'
+modelpath = "/app/app/models/heart_decease_pipeline.dill"
+#modelpath = '/Users/maria/Documents/GeekBrains/ML_Business/MLB_courseproject/models/heart_decease_pipeline.dill'
 load_model(modelpath)
 
 @app.route("/", methods=["GET"])
@@ -49,7 +49,7 @@ def predict():
 	# ensure an image was properly uploaded to our endpoint
 	if flask.request.method == "POST":
 
-		Age, Sex, ChestPainType, Cholesterol, ExerciseAngina, ST_Slope, Oldpeak= "", "", "","", "", "",""
+		Age, Sex, ChestPainType, Cholesterol, ExerciseAngina, ST_Slope, Oldpeak= None, None, None,None, None, None,None
 		request_json = flask.request.get_json()
 		if request_json["Age"]:
 			Age = request_json['Age']
@@ -84,6 +84,12 @@ def predict():
 		except AttributeError as e:
 			logger.warning(f'{dt} Exception: {str(e)}')
 			data['predictions'] = str(e)
+			data['success'] = False
+			return flask.jsonify(data)
+
+		except ValueError as e:
+			logger.warning(f'{dt} Exception: {str(e)}')
+			data['predictions'] = f'{dt} Exception: {str(e)}'
 			data['success'] = False
 			return flask.jsonify(data)
 
